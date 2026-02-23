@@ -1,7 +1,33 @@
 services:
   - type: web
     name: bukber-babel2026
-    env: php
+    env: docker
     plan: free
-    buildCommand: composer install --no-interaction --prefer-dist --optimize-autoloader && npm ci && npm run build && php artisan config:cache && php artisan route:cache && php artisan view:cache
-    startCommand: php artisan serve --host=0.0.0.0 --port=$PORT
+    dockerfilePath: ./Dockerfile
+    # Render passes PORT automatically; nginx inside the container listens on 80
+    port: 80
+    envVars:
+      - key: APP_NAME
+        value: BukberYuk
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: APP_KEY
+        sync: false   # Set manually: run `php artisan key:generate --show` and paste the result
+      - key: APP_URL
+        sync: false
+      - key: DB_CONNECTION
+        value: mysql
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: 3306
+      - key: DB_DATABASE
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: SESSION_DRIVER
+        value: cookie
