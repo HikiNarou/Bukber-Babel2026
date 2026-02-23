@@ -50,6 +50,7 @@ Website platform untuk mengatur acara Buka Bersama (Bukber) menggunakan Laravel 
 ### 2) Deploy Laravel ke Render (Web Service)
 1. Push repo ini ke GitHub.
 2. Render Dashboard → **New** → **Web Service** → pilih repo ini.
+   - Kalau deploy via Blueprint, pakai file `render.yaml` di repo ini agar runtime langsung terkunci ke `PHP`.
 3. Pilih:
    - **Environment**: `PHP`
    - **Region**: yang paling dekat user/Aiven region
@@ -60,6 +61,10 @@ Website platform untuk mengatur acara Buka Bersama (Bukber) menggunakan Laravel 
    - **Start Command**  
      `php artisan serve --host=0.0.0.0 --port=$PORT`
    - **Opsi production (direkomendasikan):** pakai **Dockerfile** (Apache/Nginx + PHP-FPM) dan buat Render sebagai Docker Web Service.
+   - Jika log menunjukkan `Using Node.js version ...` lalu `composer: command not found`, berarti servicenya kebaca sebagai Node.
+     1. Buka service Render → **Settings** → cek runtime/environment, pastikan **PHP**.
+     2. Atau hapus service lama lalu redeploy memakai Blueprint dari `render.yaml`.
+     3. Jangan pakai service tipe `Static Site` atau `Node` untuk project Laravel ini.
 5. Tambahkan Environment Variables di Render:
 
    | Key | Value |
@@ -159,6 +164,12 @@ Vercel digunakan sebagai entry domain + edge proxy.
 - [ ] Form registrasi bisa insert data
 - [ ] Dashboard bisa baca data
 - [ ] Domain Vercel me-rewrite ke Render dengan status 200
+
+### 7) Opsi Database Gratis (Alternatif Aiven)
+- **Aiven MySQL**: bagus untuk belajar/POC, tapi cek limit free trial karena umumnya tidak permanen.
+- **TiDB Serverless** (MySQL-compatible): ada free tier dan biasanya paling gampang kalau butuh protokol MySQL.
+- **Railway MySQL**: kadang ada kredit gratis, cocok untuk demo jangka pendek.
+- Kalau butuh gratis jangka panjang tanpa MySQL requirement ketat, pertimbangkan PostgreSQL free tier (Neon/Supabase) lalu sesuaikan driver Laravel.
 
 ## License
 MIT
