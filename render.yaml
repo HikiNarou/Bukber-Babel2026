@@ -4,8 +4,6 @@ services:
     env: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    # Render passes PORT automatically; nginx inside the container listens on 80
-    port: 80
     envVars:
       - key: APP_NAME
         value: BukberYuk
