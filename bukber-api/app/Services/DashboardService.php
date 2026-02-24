@@ -7,9 +7,13 @@ use App\Models\PesertaHari;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class DashboardService
 {
+    private const MINGGU_LIST = [1, 2, 3, 4];
+    private ?bool $hasPesertaHariMingguColumn = null;
+
     public function getStats(): array
     {
         return Cache::remember('dashboard_stats', 60, function (): array {
@@ -18,12 +22,32 @@ class DashboardService
             $minBudget = (int) (Peserta::query()->min('budget_per_orang') ?? 0);
             $maxBudget = (int) (Peserta::query()->max('budget_per_orang') ?? 0);
 
-            $distribusiRaw = Peserta::query()
-                ->select('minggu', DB::raw('COUNT(*) as jumlah'))
-                ->groupBy('minggu')
-                ->pluck('jumlah', 'minggu');
+            if ($this->hasMingguOnPesertaHari()) {
+                $distribusiRows = PesertaHari::query()
+                    ->selectRaw('peserta_hari.minggu as minggu')
+                    ->selectRaw('COUNT(DISTINCT peserta_hari.peserta_id) as jumlah')
+                    ->groupBy('peserta_hari.minggu')
+                    ->get();
+            } else {
+                $distribusiRows = Peserta::query()
+                    ->selectRaw('peserta.minggu as minggu')
+                    ->selectRaw('COUNT(*) as jumlah')
+                    ->groupBy('peserta.minggu')
+                    ->get();
+            }
 
-            $distribusiMinggu = collect([1, 2, 3, 4])->map(static function (int $minggu) use ($distribusiRaw): array {
+            $distribusiRaw = $distribusiRows->mapWithKeys(static function ($row): array {
+                $minggu = (int) data_get($row, 'minggu', 0);
+                $jumlah = (int) data_get($row, 'jumlah', 0);
+
+                if ($minggu < 1 || $minggu > 4) {
+                    return [];
+                }
+
+                return [$minggu => $jumlah];
+            });
+
+            $distribusiMinggu = collect(self::MINGGU_LIST)->map(static function (int $minggu) use ($distribusiRaw): array {
                 return [
                     'minggu' => $minggu,
                     'jumlah' => (int) ($distribusiRaw[$minggu] ?? 0),
@@ -31,10 +55,10 @@ class DashboardService
             })->values();
 
             $mingguFavorit = $distribusiMinggu
-                ->sortByDesc('jumlah')
+                ->sort(static fn (array $a, array $b): int => ($b['jumlah'] <=> $a['jumlah']) ?: ($a['minggu'] <=> $b['minggu']))
                 ->first(static fn (array $item): bool => $item['jumlah'] > 0);
 
-            [$rekomendasiHari, $transparansiHari] = $this->buildHariRecommendation($totalPeserta, $avgBudget);
+            [$rekomendasiHari, $transparansiHari, $detailKetersediaan] = $this->buildHariRecommendation($totalPeserta);
 
             return [
                 'total_peserta' => $totalPeserta,
@@ -48,6 +72,7 @@ class DashboardService
                 'distribusi_minggu' => $distribusiMinggu->all(),
                 'rekomendasi_hari' => $rekomendasiHari,
                 'transparansi_hari' => $transparansiHari,
+                'detail_ketersediaan' => $detailKetersediaan,
             ];
         });
     }
@@ -55,10 +80,22 @@ class DashboardService
     public function getChartHari(): array
     {
         return Cache::remember('chart_hari', 60, function (): array {
-            $raw = PesertaHari::query()
-                ->select('hari', DB::raw('COUNT(*) as jumlah'))
-                ->groupBy('hari')
-                ->pluck('jumlah', 'hari');
+            $rows = PesertaHari::query()
+                ->selectRaw('peserta_hari.hari as hari')
+                ->selectRaw('COUNT(DISTINCT peserta_hari.peserta_id) as jumlah')
+                ->groupBy('peserta_hari.hari')
+                ->get();
+
+            $raw = $rows->mapWithKeys(static function ($row): array {
+                $hari = (string) data_get($row, 'hari', '');
+                $jumlah = (int) data_get($row, 'jumlah', 0);
+
+                if ($hari === '') {
+                    return [];
+                }
+
+                return [$hari => $jumlah];
+            });
 
             return collect(PesertaHari::HARI_LIST)
                 ->map(static function (string $hari) use ($raw): array {
@@ -120,19 +157,23 @@ class DashboardService
 
     public function getResponden(int $perPage = 20, ?string $availability = null): LengthAwarePaginator
     {
+        $hariSelect = $this->hasMingguOnPesertaHari()
+            ? 'id,peserta_id,minggu,hari'
+            : 'id,peserta_id,hari';
+
         $query = Peserta::query()
             ->select([
                 'id',
                 'uuid',
                 'nama_lengkap',
-                'minggu',
                 'budget_per_orang',
                 'catatan',
                 'created_at',
                 'updated_at',
             ])
+            ->withCount('hari')
             ->with([
-                'hari:id,peserta_id,hari',
+                "hari:{$hariSelect}",
                 'lokasi:id,peserta_id,nama_tempat,alamat,latitude,longitude,google_place_id,created_at',
             ])
             ->latest();
@@ -150,36 +191,48 @@ class DashboardService
             ->withQueryString();
     }
 
-    private function buildHariRecommendation(int $totalPeserta, int $fallbackBudget): array
+    private function buildHariRecommendation(int $totalPeserta): array
     {
-        $aggregateByHari = PesertaHari::query()
-            ->join('peserta', 'peserta.id', '=', 'peserta_hari.peserta_id')
-            ->select(
-                'peserta_hari.hari',
-                DB::raw('COUNT(*) as jumlah_peserta'),
-                DB::raw('AVG(peserta.budget_per_orang) as rata_rata_budget')
-            )
-            ->groupBy('peserta_hari.hari')
-            ->get()
-            ->keyBy('hari');
+        if ($this->hasMingguOnPesertaHari()) {
+            $aggregateRows = PesertaHari::query()
+                ->selectRaw('peserta_hari.minggu as minggu')
+                ->selectRaw('peserta_hari.hari as hari')
+                ->selectRaw('COUNT(DISTINCT peserta_hari.peserta_id) as jumlah_peserta')
+                ->groupBy('peserta_hari.minggu', 'peserta_hari.hari')
+                ->get();
+        } else {
+            $aggregateRows = PesertaHari::query()
+                ->join('peserta', 'peserta.id', '=', 'peserta_hari.peserta_id')
+                ->selectRaw('peserta.minggu as minggu')
+                ->selectRaw('peserta_hari.hari as hari')
+                ->selectRaw('COUNT(DISTINCT peserta_hari.peserta_id) as jumlah_peserta')
+                ->groupBy('peserta.minggu', 'peserta_hari.hari')
+                ->get();
+        }
 
-        $transparansiHari = collect(PesertaHari::HARI_LIST)
-            ->map(static function (string $hari) use ($aggregateByHari, $totalPeserta): array {
-                $aggregate = $aggregateByHari->get($hari);
-                $jumlahPeserta = (int) ($aggregate->jumlah_peserta ?? 0);
-                $persentasePeserta = $totalPeserta > 0
-                    ? round(($jumlahPeserta / $totalPeserta) * 100, 2)
-                    : 0.0;
-                $rataRataBudget = $jumlahPeserta > 0
-                    ? (int) round((float) ($aggregate->rata_rata_budget ?? 0))
-                    : null;
+        $aggregateByHari = $aggregateRows
+            ->keyBy(static fn ($item): string => sprintf(
+                '%d:%s',
+                (int) data_get($item, 'minggu', 0),
+                (string) data_get($item, 'hari', '')
+            ));
 
-                return [
-                    'hari' => $hari,
-                    'jumlah_peserta' => $jumlahPeserta,
-                    'persentase_peserta' => $persentasePeserta,
-                    'rata_rata_budget' => $rataRataBudget,
-                ];
+        $transparansiHari = collect(self::MINGGU_LIST)
+            ->flatMap(function (int $minggu) use ($aggregateByHari, $totalPeserta) {
+                return collect(PesertaHari::HARI_LIST)->map(function (string $hari) use ($aggregateByHari, $minggu, $totalPeserta): array {
+                    $aggregate = $aggregateByHari->get($this->buildSlotKey($minggu, $hari));
+                    $jumlahPeserta = (int) ($aggregate->jumlah_peserta ?? 0);
+                    $persentasePeserta = $totalPeserta > 0
+                        ? round(($jumlahPeserta / $totalPeserta) * 100, 2)
+                        : 0.0;
+
+                    return [
+                        'minggu' => $minggu,
+                        'hari' => $hari,
+                        'jumlah_peserta' => $jumlahPeserta,
+                        'persentase_peserta' => $persentasePeserta,
+                    ];
+                });
             })
             ->values();
 
@@ -190,11 +243,8 @@ class DashboardService
                     return $b['jumlah_peserta'] <=> $a['jumlah_peserta'];
                 }
 
-                $budgetA = $a['rata_rata_budget'] ?? PHP_INT_MAX;
-                $budgetB = $b['rata_rata_budget'] ?? PHP_INT_MAX;
-
-                if ($budgetA !== $budgetB) {
-                    return $budgetA <=> $budgetB;
+                if ($a['minggu'] !== $b['minggu']) {
+                    return $a['minggu'] <=> $b['minggu'];
                 }
 
                 return ($hariOrder[$a['hari']] ?? 999) <=> ($hariOrder[$b['hari']] ?? 999);
@@ -203,7 +253,7 @@ class DashboardService
 
         $kandidatUtama = $rankingHari->first();
         if (! $kandidatUtama || $kandidatUtama['jumlah_peserta'] === 0) {
-            return [null, $transparansiHari->all()];
+            return [null, $transparansiHari->all(), $this->buildDetailKetersediaan($transparansiHari)];
         }
 
         $tieGroup = $rankingHari
@@ -212,15 +262,56 @@ class DashboardService
         $isTie = $tieGroup->count() > 1;
 
         $rekomendasiHari = [
+            'minggu' => $kandidatUtama['minggu'],
             'hari' => $kandidatUtama['hari'],
             'jumlah_peserta' => $kandidatUtama['jumlah_peserta'],
             'persentase_peserta' => $kandidatUtama['persentase_peserta'],
-            'rata_rata_budget' => $kandidatUtama['rata_rata_budget'] ?? $fallbackBudget,
             'is_tie' => $isTie,
-            'tie_breaker' => $isTie ? 'budget_terendah' : 'jumlah_peserta_tertinggi',
-            'kandidat_teratas' => $rankingHari->take(3)->values()->all(),
+            'tie_breaker' => $isTie ? 'minggu_terawal_lalu_hari_terawal' : 'jumlah_peserta_tertinggi',
+            'kandidat_teratas' => $rankingHari->take(5)->values()->all(),
         ];
 
-        return [$rekomendasiHari, $transparansiHari->all()];
+        return [$rekomendasiHari, $transparansiHari->all(), $this->buildDetailKetersediaan($transparansiHari)];
+    }
+
+    private function buildDetailKetersediaan(\Illuminate\Support\Collection $transparansiHari): array
+    {
+        $transparansiMap = $transparansiHari
+            ->keyBy(fn (array $item): string => $this->buildSlotKey((int) $item['minggu'], (string) $item['hari']));
+
+        return collect(self::MINGGU_LIST)
+            ->map(function (int $minggu) use ($transparansiMap): array {
+                return [
+                    'minggu' => $minggu,
+                    'hari' => collect(PesertaHari::HARI_LIST)
+                        ->map(function (string $hari) use ($minggu, $transparansiMap): array {
+                            $item = $transparansiMap->get($this->buildSlotKey($minggu, $hari));
+
+                            return [
+                                'hari' => $hari,
+                                'jumlah_peserta' => (int) ($item['jumlah_peserta'] ?? 0),
+                                'persentase_peserta' => (float) ($item['persentase_peserta'] ?? 0),
+                            ];
+                        })
+                        ->values()
+                        ->all(),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function buildSlotKey(int $minggu, string $hari): string
+    {
+        return "{$minggu}:{$hari}";
+    }
+
+    private function hasMingguOnPesertaHari(): bool
+    {
+        if ($this->hasPesertaHariMingguColumn === null) {
+            $this->hasPesertaHariMingguColumn = Schema::hasColumn('peserta_hari', 'minggu');
+        }
+
+        return $this->hasPesertaHariMingguColumn;
     }
 }

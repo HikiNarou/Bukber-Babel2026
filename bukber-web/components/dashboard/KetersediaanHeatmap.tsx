@@ -1,30 +1,39 @@
 import { Card } from "@/components/ui/Card";
-import type { ChartHariItem } from "@/lib/types";
+import type { DashboardStats, Hari } from "@/lib/types";
 import { labelHari } from "@/lib/utils";
 
 interface KetersediaanHeatmapProps {
-  data: ChartHariItem[];
+  data: DashboardStats["detail_ketersediaan"];
 }
 
-const hourLabels = ["16:00", "17:00", "18:00"];
+const dayOrder: Hari[] = ["senin", "selasa", "rabu", "kamis", "jumat", "sabtu", "minggu"];
 
-function intensityClass(value: number): string {
-  if (value >= 0.75) return "bg-[#2f6df2]";
-  if (value >= 0.45) return "bg-[#204da5]";
+function intensityClass(percentage: number): string {
+  if (percentage >= 60) return "bg-[#2f6df2]";
+  if (percentage >= 35) return "bg-[#204da5]";
   return "bg-[#1a2942]";
 }
 
+function formatPercent(value: number): string {
+  return `${value.toFixed(1)}%`;
+}
+
+function barWidth(value: number): string {
+  const safeValue = Math.max(4, Math.min(100, Number.isFinite(value) ? value : 0));
+  return `${safeValue}%`;
+}
+
 export function KetersediaanHeatmap({ data }: KetersediaanHeatmapProps) {
-  const max = Math.max(...data.map((item) => item.jumlah), 1);
+  const rows = data.length > 0 ? data : [1, 2, 3, 4].map((minggu) => ({ minggu, hari: dayOrder.map((hari) => ({ hari, jumlah_peserta: 0, persentase_peserta: 0 })) }));
 
   return (
     <Card className="p-4 md:p-8">
       <div className="mb-4 flex items-center justify-between md:mb-6">
         <div>
           <h3 className="text-2xl font-semibold text-white md:text-4xl">Detail Ketersediaan</h3>
-          <p className="mt-1 text-sm text-slate-400 md:text-xl">Heatmap ketersediaan jam per hari</p>
+          <p className="mt-1 text-sm text-slate-400 md:text-xl">Heatmap ketersediaan per minggu dan hari</p>
         </div>
-        <div className="hidden items-center gap-2 text-sm text-slate-300 md:flex">
+        <div className="hidden items-center gap-2 text-sm text-slate-300 lg:flex">
           <span className="h-3 w-3 rounded-full bg-[#1a2942]" />
           Low
           <span className="h-3 w-3 rounded-full bg-[#204da5]" />
@@ -34,7 +43,7 @@ export function KetersediaanHeatmap({ data }: KetersediaanHeatmapProps) {
         </div>
       </div>
 
-      <div className="space-y-2.5 md:hidden">
+      <div className="space-y-3 lg:hidden">
         <div className="flex items-center gap-2 text-xs text-slate-300">
           <span className="h-2.5 w-2.5 rounded-full bg-[#1a2942]" />
           Low
@@ -43,51 +52,89 @@ export function KetersediaanHeatmap({ data }: KetersediaanHeatmapProps) {
           <span className="h-2.5 w-2.5 rounded-full bg-[#2f6df2]" />
           High
         </div>
-        {data.map((item) => {
-          const normalized = item.jumlah / max;
+
+        {rows.map((row) => {
+          const totalPesertaMinggu = row.hari.reduce((sum, cell) => sum + cell.jumlah_peserta, 0);
+
           return (
-            <article key={item.hari} className="rounded-xl border border-white/8 bg-[#132542] p-3">
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-sm font-semibold text-white">{labelHari(item.hari)}</p>
-                <p className="text-xs text-slate-400">{item.jumlah} peserta</p>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {hourLabels.map((label, rowIndex) => {
-                  const adjusted = normalized * (rowIndex === 2 ? 1 : rowIndex === 1 ? 0.85 : 0.6);
+            <details key={row.minggu} className="group rounded-xl border border-white/8 bg-[#132542] p-3.5">
+              <summary className="flex list-none cursor-pointer items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white">Minggu {row.minggu}</p>
+                  <p className="text-[11px] text-slate-400">Tap untuk lihat detail</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs text-slate-400">{totalPesertaMinggu} total slot</p>
+                  <span className="text-xs text-slate-300 transition-transform group-open:rotate-180">▾</span>
+                </div>
+              </summary>
+
+              <div className="mt-3 space-y-2 border-t border-white/8 pt-3">
+                {row.hari.map((cell) => {
                   return (
-                    <div key={`${item.hari}-${label}`} className="space-y-1">
-                      <p className="text-[11px] text-slate-400">{label}</p>
-                      <div className={`h-8 rounded-lg ${intensityClass(adjusted)}`} />
+                    <div key={`${row.minggu}-${cell.hari}`} className="rounded-lg border border-white/6 bg-[#0f203b] p-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-medium text-slate-200">{labelHari(cell.hari)}</p>
+                        <p className="text-xs text-slate-200">
+                          <span className="font-semibold text-white">{cell.jumlah_peserta}</span> peserta
+                        </p>
+                      </div>
+
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <div className="h-2 flex-1 rounded-full bg-[#09182f]">
+                          <div
+                            className={`h-full rounded-full ${intensityClass(cell.persentase_peserta)}`}
+                            style={{ width: barWidth(cell.persentase_peserta) }}
+                          />
+                        </div>
+                        <span className="w-11 shrink-0 text-right text-[11px] font-medium text-slate-100">
+                          {formatPercent(cell.persentase_peserta)}
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
               </div>
-            </article>
+            </details>
           );
         })}
       </div>
 
-      <div className="hidden overflow-x-auto md:block">
-        <div className="min-w-[680px] space-y-3">
-          <div className="grid grid-cols-8 gap-2 text-sm text-slate-400">
-            <span className="px-2">Jam</span>
-            {data.map((item) => (
-              <span key={item.hari} className="text-center">
-                {labelHari(item.hari)}
-              </span>
-            ))}
-          </div>
+      <div className="hidden lg:block">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[860px] table-fixed border-separate border-spacing-2">
+            <thead>
+              <tr>
+                <th className="w-[15%] px-2 py-1 text-left text-sm font-medium text-slate-400">Minggu</th>
+                {dayOrder.map((hari) => (
+                  <th key={hari} className="px-2 py-1 text-center text-sm font-medium text-slate-400">
+                    {labelHari(hari)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.minggu}>
+                  <td className="rounded-lg bg-[#132542] px-3 py-2 text-sm font-semibold text-white">Minggu {row.minggu}</td>
+                  {dayOrder.map((hari) => {
+                    const cell = row.hari.find((item) => item.hari === hari) ?? {
+                      hari,
+                      jumlah_peserta: 0,
+                      persentase_peserta: 0,
+                    };
 
-          {hourLabels.map((label, rowIndex) => (
-            <div key={label} className="grid grid-cols-8 gap-2">
-              <span className="px-2 py-2 text-sm text-slate-400">{label}</span>
-              {data.map((item) => {
-                const normalized = item.jumlah / max;
-                const adjusted = normalized * (rowIndex === 2 ? 1 : rowIndex === 1 ? 0.85 : 0.6);
-                return <div key={`${item.hari}-${label}`} className={`h-10 rounded-lg ${intensityClass(adjusted)}`} />;
-              })}
-            </div>
-          ))}
+                    return (
+                      <td key={`${row.minggu}-${hari}`} className={`rounded-lg px-2 py-2 text-center text-sm text-slate-100 ${intensityClass(cell.persentase_peserta)}`}>
+                        <p className="font-semibold">{cell.jumlah_peserta}</p>
+                        <p className="text-[11px] text-slate-200/85">{formatPercent(cell.persentase_peserta)}</p>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </Card>

@@ -2,6 +2,10 @@ import { z } from "zod";
 import { BUDGET_MAX, BUDGET_MIN } from "./constants";
 
 const hariEnum = z.enum(["senin", "selasa", "rabu", "kamis", "jumat", "sabtu", "minggu"]);
+const preferensiMingguSchema = z.object({
+  minggu: z.number().int().min(1).max(4),
+  hari: z.array(hariEnum).min(1, "Pilih minimal 1 hari pada minggu ini"),
+});
 
 export const registrasiDraftSchema = z.object({
   nama_lengkap: z
@@ -9,10 +13,34 @@ export const registrasiDraftSchema = z.object({
     .min(3, "Nama minimal 3 karakter")
     .max(100, "Nama maksimal 100 karakter")
     .regex(/^[a-zA-Z\s'.]+$/, "Nama hanya boleh huruf, titik, petik, dan spasi"),
-  minggu: z.number().int().min(1).max(4),
-  hari: z.array(hariEnum).min(1, "Pilih minimal 1 hari"),
+  preferensi_minggu: z
+    .array(preferensiMingguSchema)
+    .min(1, "Pilih minimal 1 minggu")
+    .max(4, "Maksimal 4 minggu"),
   budget_per_orang: z.number().int().min(BUDGET_MIN).max(BUDGET_MAX),
   catatan: z.string().max(500, "Catatan maksimal 500 karakter").optional(),
+}).superRefine((payload, ctx) => {
+  const seenWeeks = new Set<number>();
+
+  payload.preferensi_minggu.forEach((item, index) => {
+    if (seenWeeks.has(item.minggu)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["preferensi_minggu", index, "minggu"],
+        message: "Minggu tidak boleh duplikat",
+      });
+    } else {
+      seenWeeks.add(item.minggu);
+    }
+
+    if (new Set(item.hari).size !== item.hari.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["preferensi_minggu", index, "hari"],
+        message: "Hari pada minggu yang sama tidak boleh duplikat",
+      });
+    }
+  });
 });
 
 export const lokasiSchema = z.object({

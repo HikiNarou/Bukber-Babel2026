@@ -1,4 +1,4 @@
-import type { Hari } from "./types";
+import type { Hari, PreferensiMinggu } from "./types";
 
 const idrFormatter = new Intl.NumberFormat("id-ID", {
   style: "currency",
@@ -24,6 +24,24 @@ export function capitalize(value: string): string {
 
 export function labelHari(hari: Hari): string {
   return capitalize(hari);
+}
+
+export function formatPreferensiMinggu(preferensi: PreferensiMinggu[] | null | undefined): string {
+  if (!preferensi || preferensi.length === 0) {
+    return "";
+  }
+
+  return preferensi
+    .map((item) => `M${item.minggu}: ${item.hari.map(labelHari).join(", ") || "-"}`)
+    .join(" • ");
+}
+
+export function hitungTotalSlot(preferensi: PreferensiMinggu[] | null | undefined): number {
+  if (!preferensi || preferensi.length === 0) {
+    return 0;
+  }
+
+  return preferensi.reduce((total, item) => total + item.hari.length, 0);
 }
 
 export function formatDateIndonesia(dateValue: string | null | undefined): string {

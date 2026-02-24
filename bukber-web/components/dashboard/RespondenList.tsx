@@ -1,12 +1,12 @@
 import { Card } from "@/components/ui/Card";
 import type { Peserta } from "@/lib/types";
-import { labelHari } from "@/lib/utils";
+import { formatPreferensiMinggu } from "@/lib/utils";
 
 function getStatus(peserta: Peserta): { label: string; className: string } {
-  if (peserta.hari.length >= 3) {
+  if (peserta.total_slot_ketersediaan >= 3) {
     return { label: "Bisa", className: "bg-emerald-500/20 text-emerald-300" };
   }
-  if (peserta.hari.length === 2) {
+  if (peserta.total_slot_ketersediaan === 2) {
     return { label: "Mungkin", className: "bg-amber-500/20 text-amber-300" };
   }
   return { label: "Tidak", className: "bg-rose-500/20 text-rose-300" };
@@ -29,6 +29,7 @@ export function RespondenList({ data }: RespondenListProps) {
       <div className="min-h-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto overscroll-x-none pr-1 [scrollbar-gutter:stable]">
         {data.slice(0, 5).map((peserta) => {
           const status = getStatus(peserta);
+          const preferensiLabel = formatPreferensiMinggu(peserta.preferensi_minggu);
           return (
             <article
               key={peserta.uuid}
@@ -40,7 +41,7 @@ export function RespondenList({ data }: RespondenListProps) {
 
               <div className="min-w-0 flex-1">
                 <p className="truncate text-base font-medium text-slate-100 md:text-2xl">{peserta.nama_lengkap}</p>
-                <p className="truncate text-sm text-slate-400 md:text-lg">{peserta.hari.slice(0, 2).map(labelHari).join(", ") || "Belum memilih hari"}</p>
+                <p className="truncate text-sm text-slate-400 md:text-lg">{preferensiLabel || "Belum memilih preferensi minggu/hari"}</p>
               </div>
 
               <span className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold md:text-sm ${status.className}`}>{status.label}</span>

@@ -30,12 +30,19 @@ export interface Lokasi {
   source?: "database" | "nominatim";
 }
 
+export interface PreferensiMinggu {
+  minggu: Minggu;
+  hari: Hari[];
+}
+
 export interface Peserta {
   id: number;
   uuid: string;
   nama_lengkap: string;
-  minggu: Minggu;
+  minggu: Minggu[];
   hari: Hari[];
+  preferensi_minggu: PreferensiMinggu[];
+  total_slot_ketersediaan: number;
   budget_per_orang: number;
   catatan?: string | null;
   lokasi?: Lokasi | null;
@@ -53,24 +60,32 @@ export interface DashboardStats {
   } | null;
   distribusi_minggu: { minggu: Minggu; jumlah: number }[];
   rekomendasi_hari: {
+    minggu: Minggu;
     hari: Hari;
     jumlah_peserta: number;
     persentase_peserta: number;
-    rata_rata_budget: number | null;
     is_tie: boolean;
-    tie_breaker: "jumlah_peserta_tertinggi" | "budget_terendah";
+    tie_breaker: "jumlah_peserta_tertinggi" | "minggu_terawal_lalu_hari_terawal";
     kandidat_teratas: {
+      minggu: Minggu;
       hari: Hari;
       jumlah_peserta: number;
       persentase_peserta: number;
-      rata_rata_budget: number | null;
     }[];
   } | null;
   transparansi_hari: {
+    minggu: Minggu;
     hari: Hari;
     jumlah_peserta: number;
     persentase_peserta: number;
-    rata_rata_budget: number | null;
+  }[];
+  detail_ketersediaan: {
+    minggu: Minggu;
+    hari: {
+      hari: Hari;
+      jumlah_peserta: number;
+      persentase_peserta: number;
+    }[];
   }[];
 }
 
@@ -111,8 +126,7 @@ export interface TanggalFinal {
 
 export interface RegistrasiInput {
   nama_lengkap: string;
-  minggu: Minggu;
-  hari: Hari[];
+  preferensi_minggu: PreferensiMinggu[];
   budget_per_orang: number;
   catatan?: string;
   lokasi: {

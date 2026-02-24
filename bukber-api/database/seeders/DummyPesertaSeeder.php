@@ -16,12 +16,27 @@ class DummyPesertaSeeder extends Seeder
         $peserta = Peserta::factory()->count(25)->create();
 
         foreach ($peserta as $item) {
-            $hari = collect(PesertaHari::HARI_LIST)
+            $mingguList = collect(PesertaHari::MINGGU_LIST)
                 ->shuffle()
-                ->take(fake()->numberBetween(2, 4));
+                ->take(fake()->numberBetween(1, 3))
+                ->sort()
+                ->values();
 
-            foreach ($hari as $day) {
-                $item->hari()->create(['hari' => $day]);
+            $item->update([
+                'minggu' => (int) ($mingguList->first() ?? 1),
+            ]);
+
+            foreach ($mingguList as $minggu) {
+                $hari = collect(PesertaHari::HARI_LIST)
+                    ->shuffle()
+                    ->take(fake()->numberBetween(1, 3));
+
+                foreach ($hari as $day) {
+                    $item->hari()->create([
+                        'minggu' => $minggu,
+                        'hari' => $day,
+                    ]);
+                }
             }
 
             Lokasi::factory()->create([

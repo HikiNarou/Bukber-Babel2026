@@ -11,9 +11,20 @@ class StoreRegistrasiRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $lokasi = $this->input('lokasi');
+        $preferensiMinggu = $this->input('preferensi_minggu');
+        $legacyMinggu = $this->input('minggu');
+        $legacyHari = $this->input('hari');
+
+        if (! is_array($preferensiMinggu) && is_numeric($legacyMinggu) && is_array($legacyHari)) {
+            $preferensiMinggu = [[
+                'minggu' => (int) $legacyMinggu,
+                'hari' => $legacyHari,
+            ]];
+        }
 
         $payload = [
             'catatan' => $this->normalizeNullableString($this->input('catatan')),
+            'preferensi_minggu' => $preferensiMinggu,
         ];
 
         if (is_array($lokasi)) {
@@ -39,9 +50,10 @@ class StoreRegistrasiRequest extends FormRequest
     {
         return [
             'nama_lengkap' => ['required', 'string', 'min:3', 'max:100', "regex:/^[a-zA-Z\\s'.]+$/"],
-            'minggu' => ['required', 'integer', 'between:1,4'],
-            'hari' => ['required', 'array', 'min:1'],
-            'hari.*' => ['required', Rule::in(PesertaHari::HARI_LIST)],
+            'preferensi_minggu' => ['required', 'array', 'min:1', 'max:4'],
+            'preferensi_minggu.*.minggu' => ['required', 'integer', Rule::in(PesertaHari::MINGGU_LIST), 'distinct'],
+            'preferensi_minggu.*.hari' => ['required', 'array', 'min:1', 'max:7'],
+            'preferensi_minggu.*.hari.*' => ['required', Rule::in(PesertaHari::HARI_LIST)],
             'budget_per_orang' => ['required', 'integer', 'min:10000', 'max:500000'],
             'catatan' => ['nullable', 'string', 'max:500'],
             'lokasi' => ['required', 'array'],

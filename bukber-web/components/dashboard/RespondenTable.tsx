@@ -1,7 +1,7 @@
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import type { Peserta, RespondenFilter } from "@/lib/types";
-import { formatCompactRupiah, labelHari } from "@/lib/utils";
+import { formatCompactRupiah, formatPreferensiMinggu } from "@/lib/utils";
 
 const filterOptions: Array<{ value: RespondenFilter; label: string }> = [
   { value: "all", label: "Semua" },
@@ -16,8 +16,13 @@ interface RespondenTableProps {
   isLoading: boolean;
   error?: string | null;
   filter: RespondenFilter;
+  page: number;
+  totalPages: number;
+  totalItems: number;
+  perPage: number;
   onToggleExpand: () => void;
   onFilterChange: (value: RespondenFilter) => void;
+  onPageChange: (page: number) => void;
 }
 
 export function RespondenTable({
@@ -26,10 +31,17 @@ export function RespondenTable({
   isLoading,
   error,
   filter,
+  page,
+  totalPages,
+  totalItems,
+  perPage,
   onToggleExpand,
   onFilterChange,
+  onPageChange,
 }: RespondenTableProps) {
   const contentId = "responden-table-content";
+  const startItem = totalItems === 0 ? 0 : (page - 1) * perPage + 1;
+  const endItem = totalItems === 0 ? 0 : Math.min(page * perPage, totalItems);
 
   return (
     <Card id="responden-table" className="overflow-hidden">
@@ -94,8 +106,8 @@ export function RespondenTable({
                     <thead className="bg-[#15233b] text-slate-300">
                       <tr>
                         <th className="px-6 py-3 text-base font-medium">Nama</th>
-                        <th className="px-6 py-3 text-base font-medium">Minggu</th>
-                        <th className="px-6 py-3 text-base font-medium">Hari</th>
+                        <th className="px-6 py-3 text-base font-medium">Preferensi Minggu & Hari</th>
+                        <th className="px-6 py-3 text-base font-medium">Slot Bisa</th>
                         <th className="px-6 py-3 text-base font-medium">Budget</th>
                         <th className="px-6 py-3 text-base font-medium">Lokasi</th>
                       </tr>
@@ -104,8 +116,8 @@ export function RespondenTable({
                       {data.map((peserta) => (
                         <tr key={peserta.uuid} className="border-t border-white/8 text-slate-100">
                           <td className="px-6 py-4 text-lg">{peserta.nama_lengkap}</td>
-                          <td className="px-6 py-4 text-lg">Minggu {peserta.minggu}</td>
-                          <td className="px-6 py-4 text-lg">{peserta.hari.map(labelHari).join(", ")}</td>
+                          <td className="px-6 py-4 text-lg">{formatPreferensiMinggu(peserta.preferensi_minggu) || "-"}</td>
+                          <td className="px-6 py-4 text-lg">{peserta.total_slot_ketersediaan}</td>
                           <td className="px-6 py-4 text-lg">{formatCompactRupiah(peserta.budget_per_orang)}</td>
                           <td className="px-6 py-4 text-lg">{peserta.lokasi?.nama_tempat ?? "-"}</td>
                         </tr>
@@ -118,8 +130,8 @@ export function RespondenTable({
                   {data.map((peserta) => (
                     <article key={peserta.uuid} className="rounded-2xl border border-white/8 bg-[#1b2b47]/70 p-4">
                       <h4 className="text-lg font-semibold text-white">{peserta.nama_lengkap}</h4>
-                      <p className="mt-1 text-sm text-slate-300">Minggu {peserta.minggu}</p>
-                      <p className="mt-1 text-sm text-slate-300">{peserta.hari.map(labelHari).join(", ")}</p>
+                      <p className="mt-1 text-sm text-slate-300">{formatPreferensiMinggu(peserta.preferensi_minggu) || "-"}</p>
+                      <p className="mt-1 text-sm text-slate-300">Slot Bisa: {peserta.total_slot_ketersediaan}</p>
                       <p className="mt-1 text-sm text-slate-300">{formatCompactRupiah(peserta.budget_per_orang)}</p>
                       <p className="mt-1 text-sm text-slate-300">{peserta.lokasi?.nama_tempat ?? "-"}</p>
                     </article>
@@ -129,6 +141,39 @@ export function RespondenTable({
             ) : (
               <p className="px-4 py-4 text-sm text-slate-400 md:px-8 md:text-base">Tidak ada responden untuk filter yang dipilih.</p>
             )
+          ) : null}
+
+          {!isLoading && !error && totalItems > 0 ? (
+            <div className="border-t border-white/8 px-4 py-4 md:px-8">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <p className="text-xs text-slate-400 md:text-sm">
+                  Menampilkan {startItem}-{endItem} dari {totalItems} responden.
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onPageChange(Math.max(1, page - 1))}
+                    disabled={page === 1}
+                    className="inline-flex h-9 items-center gap-1 rounded-full border border-[#355180] px-3 text-xs text-slate-100 transition enabled:hover:bg-[#1b3561] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Prev
+                  </button>
+                  <span className="rounded-full border border-[#355180] bg-[#13284d] px-3 py-1 text-xs text-slate-200 md:text-sm">
+                    Hal {page}/{totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+                    disabled={page === totalPages}
+                    className="inline-flex h-9 items-center gap-1 rounded-full border border-[#355180] px-3 text-xs text-slate-100 transition enabled:hover:bg-[#1b3561] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
           ) : null}
         </>
       ) : null}

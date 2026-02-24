@@ -27,6 +27,21 @@ function toFiniteNumber(value: number | undefined): number | undefined {
   return Number.isFinite(value) ? value : undefined;
 }
 
+function isValidDraft(value: unknown): value is Omit<RegistrasiInput, "lokasi"> {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const draft = value as Partial<RegistrasiInput>;
+
+  return (
+    typeof draft.nama_lengkap === "string" &&
+    Array.isArray(draft.preferensi_minggu) &&
+    draft.preferensi_minggu.length > 0 &&
+    typeof draft.budget_per_orang === "number"
+  );
+}
+
 const DynamicMapPicker = dynamic(
   () => import("@/components/map/MapPicker").then((module) => module.MapPicker),
   { ssr: false }
@@ -56,7 +71,13 @@ export default function LokasiPage() {
     }
 
     try {
-      const parsed = JSON.parse(raw) as Omit<RegistrasiInput, "lokasi">;
+      const parsed = JSON.parse(raw);
+
+      if (!isValidDraft(parsed)) {
+        router.replace("/daftar");
+        return;
+      }
+
       setDraft(parsed);
     } catch {
       router.replace("/daftar");

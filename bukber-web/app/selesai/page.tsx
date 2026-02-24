@@ -10,7 +10,7 @@ import { ConfettiOverlay } from "@/components/decorative/ConfettiOverlay";
 import { getRegistrasiByUuid } from "@/lib/api";
 import { REGISTRATION_RESULT_KEY } from "@/lib/constants";
 import type { Peserta } from "@/lib/types";
-import { formatRupiah, labelHari } from "@/lib/utils";
+import { formatPreferensiMinggu, formatRupiah } from "@/lib/utils";
 
 export default function SelesaiPage() {
   const [uuid] = useState<string | null>(() => {
@@ -48,9 +48,8 @@ export default function SelesaiPage() {
     if (!data) {
       return "Aku sudah daftar Bukber 2026! Yuk ikutan juga.";
     }
-    return `Aku sudah daftar Bukber 2026. Pilihan minggu ${data.minggu}, hari ${data.hari
-      .map(labelHari)
-      .join(", ")}, budget ${formatRupiah(data.budget_per_orang)}. Yuk daftar juga di BukberYuk!`;
+    const preferensiLabel = formatPreferensiMinggu(data.preferensi_minggu) || "Belum terisi";
+    return `Aku sudah daftar Bukber 2026. Preferensi: ${preferensiLabel}. Budget ${formatRupiah(data.budget_per_orang)}. Yuk daftar juga di BukberYuk!`;
   }, [data]);
 
   return (
@@ -74,10 +73,7 @@ export default function SelesaiPage() {
                   <span className="text-slate-400">Nama:</span> {data.nama_lengkap}
                 </p>
                 <p>
-                  <span className="text-slate-400">Minggu:</span> Minggu {data.minggu}
-                </p>
-                <p>
-                  <span className="text-slate-400">Hari:</span> {data.hari.map(labelHari).join(", ")}
+                  <span className="text-slate-400">Preferensi:</span> {formatPreferensiMinggu(data.preferensi_minggu) || "-"}
                 </p>
                 <p>
                   <span className="text-slate-400">Budget:</span> {formatRupiah(data.budget_per_orang)}

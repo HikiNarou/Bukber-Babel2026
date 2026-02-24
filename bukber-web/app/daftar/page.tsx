@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { UserRound } from "lucide-react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -15,14 +15,79 @@ import { REGISTRATION_DRAFT_KEY } from "@/lib/constants";
 import type { RegistrasiDraftForm } from "@/lib/validations";
 import { registrasiDraftSchema } from "@/lib/validations";
 import { Container } from "@/components/layout/Container";
+import type { Hari, Minggu, PreferensiMinggu } from "@/lib/types";
+
+const validDays: ReadonlySet<Hari> = new Set(["senin", "selasa", "rabu", "kamis", "jumat", "sabtu", "minggu"]);
+const validWeeks: ReadonlySet<Minggu> = new Set([1, 2, 3, 4]);
 
 const defaultValues: RegistrasiDraftForm = {
   nama_lengkap: "",
-  minggu: 2,
-  hari: ["jumat", "sabtu"],
+  preferensi_minggu: [{ minggu: 2, hari: ["jumat", "sabtu"] }],
   budget_per_orang: 150_000,
   catatan: "",
 };
+
+type LegacyDraft = Partial<RegistrasiDraftForm> & {
+  minggu?: number | number[];
+  hari?: Hari[];
+};
+
+function normalizePreferensi(preferensi: unknown): PreferensiMinggu[] {
+  if (!Array.isArray(preferensi)) {
+    return [];
+  }
+
+  const result: PreferensiMinggu[] = [];
+  const seen = new Set<number>();
+
+  for (const item of preferensi) {
+    if (typeof item !== "object" || item === null) continue;
+    const mingguRaw = (item as { minggu?: unknown }).minggu;
+    const hariRaw = (item as { hari?: unknown }).hari;
+
+    if (typeof mingguRaw !== "number" || !validWeeks.has(mingguRaw as Minggu) || seen.has(mingguRaw)) continue;
+
+    const hari = Array.isArray(hariRaw)
+      ? [...new Set(hariRaw.filter((day): day is Hari => typeof day === "string" && validDays.has(day as Hari)))]
+      : [];
+
+    result.push({
+      minggu: mingguRaw as Minggu,
+      hari,
+    });
+    seen.add(mingguRaw);
+  }
+
+  return result.sort((a, b) => a.minggu - b.minggu);
+}
+
+function normalizeDraft(raw: LegacyDraft): RegistrasiDraftForm {
+  const preferensiFromNewShape = normalizePreferensi(raw.preferensi_minggu);
+
+  if (preferensiFromNewShape.length > 0) {
+    return {
+      nama_lengkap: raw.nama_lengkap ?? defaultValues.nama_lengkap,
+      preferensi_minggu: preferensiFromNewShape,
+      budget_per_orang: raw.budget_per_orang ?? defaultValues.budget_per_orang,
+      catatan: raw.catatan ?? defaultValues.catatan,
+    };
+  }
+
+  if (typeof raw.minggu === "number" && validWeeks.has(raw.minggu as Minggu)) {
+    const hari = Array.isArray(raw.hari)
+      ? [...new Set(raw.hari.filter((day): day is Hari => validDays.has(day)))]
+      : [];
+
+    return {
+      nama_lengkap: raw.nama_lengkap ?? defaultValues.nama_lengkap,
+      preferensi_minggu: [{ minggu: raw.minggu as Minggu, hari }],
+      budget_per_orang: raw.budget_per_orang ?? defaultValues.budget_per_orang,
+      catatan: raw.catatan ?? defaultValues.catatan,
+    };
+  }
+
+  return defaultValues;
+}
 
 export default function DaftarPage() {
   const router = useRouter();
@@ -37,18 +102,54 @@ export default function DaftarPage() {
       if (!stored) {
         return;
       }
-      const parsed = JSON.parse(stored) as Partial<RegistrasiDraftForm>;
-      form.reset({
-        nama_lengkap: parsed.nama_lengkap ?? defaultValues.nama_lengkap,
-        minggu: parsed.minggu ?? defaultValues.minggu,
-        hari: parsed.hari ?? defaultValues.hari,
-        budget_per_orang: parsed.budget_per_orang ?? defaultValues.budget_per_orang,
-        catatan: parsed.catatan ?? defaultValues.catatan,
-      });
+      const parsed = JSON.parse(stored) as LegacyDraft;
+      form.reset(normalizeDraft(parsed));
     } catch {
       form.reset(defaultValues);
     }
   }, [form]);
+
+  const preferensiMinggu = useWatch({
+    control: form.control,
+    name: "preferensi_minggu",
+  }) ?? [];
+  const selectedWeeks = preferensiMinggu
+    .map((item) => item.minggu)
+    .filter((minggu): minggu is Minggu => validWeeks.has(minggu as Minggu));
+
+  const updateSelectedWeeks = (weeks: Minggu[]) => {
+    const current = form.getValues("preferensi_minggu");
+    const currentMap = new Map(current.map((item) => [item.minggu, item.hari] as const));
+
+    const next = weeks
+      .sort((a, b) => a - b)
+      .map((minggu) => ({
+        minggu,
+        hari: currentMap.get(minggu) ?? [],
+      }));
+
+    form.setValue("preferensi_minggu", next, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  };
+
+  const updateHariForMinggu = (minggu: Minggu, hari: Hari[]) => {
+    const current = form.getValues("preferensi_minggu");
+    const next = current.map((item) =>
+      item.minggu === minggu
+        ? {
+            ...item,
+            hari,
+          }
+        : item
+    );
+
+    form.setValue("preferensi_minggu", next, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  };
 
   const onSubmit = form.handleSubmit((values) => {
     localStorage.setItem(REGISTRATION_DRAFT_KEY, JSON.stringify(values));
@@ -90,23 +191,34 @@ export default function DaftarPage() {
               <label className="text-base text-slate-100 md:text-2xl">Pilih Minggu</label>
               <span className="text-xs text-slate-400 md:text-xl">Bisa pilih lebih dari satu</span>
             </div>
-            <Controller
-              control={form.control}
-              name="minggu"
-              render={({ field }) => <WeekSelector value={field.value} onChange={field.onChange} />}
-            />
+            <WeekSelector value={selectedWeeks} onChange={updateSelectedWeeks} />
+            {form.formState.errors.preferensi_minggu?.message ? (
+              <p className="mt-2 text-sm text-rose-300">{form.formState.errors.preferensi_minggu.message}</p>
+            ) : null}
           </div>
 
           <div>
-            <label className="mb-2 block text-base text-slate-100 md:mb-3 md:text-2xl">Preferensi Hari</label>
-            <Controller
-              control={form.control}
-              name="hari"
-              render={({ field }) => <DayChips value={field.value} onChange={field.onChange} />}
-            />
-            {form.formState.errors.hari?.message ? (
-              <p className="mt-2 text-sm text-rose-300">{form.formState.errors.hari.message}</p>
-            ) : null}
+            <label className="mb-2 block text-base text-slate-100 md:mb-3 md:text-2xl">Preferensi Hari per Minggu</label>
+            <div className="space-y-4">
+              {preferensiMinggu.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-slate-500/70 px-4 py-3 text-sm text-slate-300">
+                  Pilih minimal 1 minggu terlebih dahulu, lalu tentukan hari untuk setiap minggu.
+                </p>
+              ) : null}
+
+              {preferensiMinggu.map((item, index) => {
+                const mingguKey = item.minggu as Minggu;
+                const weekError = form.formState.errors.preferensi_minggu?.[index]?.hari?.message as string | undefined;
+
+                return (
+                  <div key={mingguKey} className="rounded-2xl border border-white/10 bg-[#162844] p-4 md:p-5">
+                    <p className="mb-3 text-sm font-semibold text-slate-100 md:text-lg">Minggu {mingguKey}</p>
+                    <DayChips value={item.hari} onChange={(days) => updateHariForMinggu(mingguKey, days)} />
+                    {weekError ? <p className="mt-2 text-sm text-rose-300">{weekError}</p> : null}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           <div>

@@ -16,7 +16,7 @@ import type { ChartHariItem, DashboardStats, Peserta, RespondenAvailability, Res
 import { formatCompactRupiah, formatDateTimeAgo, labelHari } from "@/lib/utils";
 
 const RESPONDEN_LIST_LIMIT = 5;
-const RESPONDEN_TABLE_LIMIT = 25;
+const RESPONDEN_TABLE_LIMIT = 5;
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -27,7 +27,10 @@ export default function DashboardPage() {
   const [lastUpdated, setLastUpdated] = useState<string>(new Date().toISOString());
   const [tableExpanded, setTableExpanded] = useState(false);
   const [tableFilter, setTableFilter] = useState<RespondenFilter>("all");
+  const [tablePage, setTablePage] = useState(1);
   const [tableResponden, setTableResponden] = useState<Peserta[]>([]);
+  const [tableTotal, setTableTotal] = useState(0);
+  const [tableLastPage, setTableLastPage] = useState(1);
   const [tableLoading, setTableLoading] = useState(false);
   const [tableError, setTableError] = useState<string | null>(null);
 
@@ -78,8 +81,19 @@ export default function DashboardPage() {
 
       try {
         const availability: RespondenAvailability | undefined = tableFilter === "all" ? undefined : tableFilter;
-        const response = await getResponden({ per_page: RESPONDEN_TABLE_LIMIT, availability });
+        const response = await getResponden({
+          page: tablePage,
+          per_page: RESPONDEN_TABLE_LIMIT,
+          availability,
+        });
         if (!active) return;
+        const safeLastPage = Math.max(1, response.meta.last_page);
+        setTableTotal(response.meta.total);
+        setTableLastPage(safeLastPage);
+        if (tablePage > safeLastPage) {
+          setTablePage(safeLastPage);
+          return;
+        }
         setTableResponden(response.data);
       } catch (requestError) {
         if (!active) return;
@@ -95,7 +109,16 @@ export default function DashboardPage() {
     return () => {
       active = false;
     };
-  }, [tableExpanded, tableFilter]);
+  }, [tableExpanded, tableFilter, tablePage]);
+
+  const handleTableFilterChange = (value: RespondenFilter) => {
+    setTableFilter(value);
+    setTablePage(1);
+  };
+
+  const handleTablePageChange = (page: number) => {
+    setTablePage(Math.min(Math.max(1, page), tableLastPage));
+  };
 
   const mingguFavorit = useMemo(() => {
     if (!stats?.minggu_terfavorit) return "-";
@@ -103,10 +126,9 @@ export default function DashboardPage() {
   }, [stats?.minggu_terfavorit]);
 
   const rekomendasiHari = stats?.rekomendasi_hari ?? null;
-  const rekomendasiHariLabel = rekomendasiHari ? labelHari(rekomendasiHari.hari) : null;
-  const rekomendasiBudget = rekomendasiHari?.rata_rata_budget ?? stats?.rata_rata_budget ?? 0;
+  const rekomendasiHariLabel = rekomendasiHari ? `Minggu ${rekomendasiHari.minggu}, ${labelHari(rekomendasiHari.hari)}` : null;
   const rekomendasiSubtitle = rekomendasiHari
-    ? `Rekomendasi saat ini: ${rekomendasiHariLabel} • ${rekomendasiHari.jumlah_peserta} peserta (${rekomendasiHari.persentase_peserta.toFixed(2)}%) • budget ${formatCompactRupiah(rekomendasiBudget)}.`
+    ? `Mayoritas memilih ${rekomendasiHariLabel} dengan ${rekomendasiHari.jumlah_peserta} peserta (${rekomendasiHari.persentase_peserta.toFixed(2)}%).`
     : "Belum ada data yang cukup untuk menentukan hari rekomendasi.";
 
   return (
@@ -155,7 +177,7 @@ export default function DashboardPage() {
           </section>
 
           <section className="mt-6">
-            <KetersediaanHeatmap data={chartHari} />
+            <KetersediaanHeatmap data={stats?.detail_ketersediaan ?? []} />
           </section>
 
           <section className="mt-6">
@@ -169,8 +191,13 @@ export default function DashboardPage() {
               isLoading={tableLoading}
               error={tableError}
               filter={tableFilter}
+              page={tablePage}
+              totalPages={tableLastPage}
+              totalItems={tableTotal}
+              perPage={RESPONDEN_TABLE_LIMIT}
               onToggleExpand={() => setTableExpanded((value) => !value)}
-              onFilterChange={setTableFilter}
+              onFilterChange={handleTableFilterChange}
+              onPageChange={handleTablePageChange}
             />
           </section>
         </>
@@ -187,7 +214,7 @@ export default function DashboardPage() {
           </Button>
           <Button disabled={!rekomendasiHari} className="w-full sm:w-auto">
             <BarChart3 className="h-4 w-4" />
-            {rekomendasiHariLabel ? `Tetapkan ${rekomendasiHariLabel}` : "Tetapkan Hari"}
+            {rekomendasiHariLabel ? `Tetapkan ${rekomendasiHariLabel}` : "Tetapkan Tanggal"}
           </Button>
         </div>
       </Card>

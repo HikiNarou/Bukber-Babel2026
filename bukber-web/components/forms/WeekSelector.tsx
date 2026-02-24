@@ -4,15 +4,24 @@ import { WEEK_OPTIONS } from "@/lib/constants";
 import type { Minggu } from "@/lib/types";
 
 interface WeekSelectorProps {
-  value: number;
-  onChange: (value: Minggu) => void;
+  value: Minggu[];
+  onChange: (value: Minggu[]) => void;
 }
 
 export function WeekSelector({ value, onChange }: WeekSelectorProps) {
+  const toggleWeek = (week: Minggu) => {
+    if (value.includes(week)) {
+      onChange(value.filter((item) => item !== week));
+      return;
+    }
+
+    onChange([...value, week].sort((a, b) => a - b) as Minggu[]);
+  };
+
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-5">
       {WEEK_OPTIONS.map((week) => {
-        const active = value === week.key;
+        const active = value.includes(week.key);
         return (
           <button
             key={week.key}
@@ -23,7 +32,7 @@ export function WeekSelector({ value, onChange }: WeekSelectorProps) {
                 ? "border-[#3f7af5] bg-[#295fd4]/24 shadow-[0_18px_35px_-20px_rgba(63,122,245,0.9)]"
                 : "border-[#35496a] bg-[#1f2d46]/85 hover:border-[#4f6790]"
             )}
-            onClick={() => onChange(week.key)}
+            onClick={() => toggleWeek(week.key)}
           >
             <CalendarDays
               className={clsx(

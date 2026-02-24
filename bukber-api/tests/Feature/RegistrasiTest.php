@@ -16,8 +16,16 @@ class RegistrasiTest extends TestCase
             'X-Device-Fingerprint' => 'test-device-123',
         ])->postJson('/api/v1/registrasi', [
             'nama_lengkap' => 'Ahmad Fauzi',
-            'minggu' => 2,
-            'hari' => ['senin', 'rabu', 'jumat'],
+            'preferensi_minggu' => [
+                [
+                    'minggu' => 1,
+                    'hari' => ['senin', 'selasa'],
+                ],
+                [
+                    'minggu' => 4,
+                    'hari' => ['senin', 'sabtu'],
+                ],
+            ],
             'budget_per_orang' => 150000,
             'catatan' => 'No spicy',
             'lokasi' => [
@@ -31,21 +39,29 @@ class RegistrasiTest extends TestCase
         $response->assertCreated()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.nama_lengkap', 'Ahmad Fauzi')
-            ->assertJsonPath('data.minggu', 2);
+            ->assertJsonPath('data.minggu.0', 1)
+            ->assertJsonPath('data.minggu.1', 4)
+            ->assertJsonPath('data.preferensi_minggu.0.minggu', 1)
+            ->assertJsonPath('data.preferensi_minggu.1.minggu', 4);
 
         $this->assertDatabaseHas('peserta', [
             'nama_lengkap' => 'Ahmad Fauzi',
-            'minggu' => 2,
+            'minggu' => 1,
         ]);
-        $this->assertDatabaseHas('peserta_hari', ['hari' => 'senin']);
+        $this->assertDatabaseHas('peserta_hari', ['minggu' => 1, 'hari' => 'senin']);
+        $this->assertDatabaseHas('peserta_hari', ['minggu' => 4, 'hari' => 'sabtu']);
         $this->assertDatabaseHas('lokasi', ['nama_tempat' => 'Warung Sate Pak Haji']);
     }
 
     public function test_registrasi_validation_fails_without_nama(): void
     {
         $response = $this->postJson('/api/v1/registrasi', [
-            'minggu' => 2,
-            'hari' => ['senin'],
+            'preferensi_minggu' => [
+                [
+                    'minggu' => 2,
+                    'hari' => ['senin'],
+                ],
+            ],
             'budget_per_orang' => 100000,
             'lokasi' => [
                 'nama_tempat' => 'Test',
@@ -62,8 +78,12 @@ class RegistrasiTest extends TestCase
             'X-Device-Fingerprint' => 'device-for-update',
         ])->postJson('/api/v1/registrasi', [
             'nama_lengkap' => 'Budi Santoso',
-            'minggu' => 1,
-            'hari' => ['selasa'],
+            'preferensi_minggu' => [
+                [
+                    'minggu' => 1,
+                    'hari' => ['selasa'],
+                ],
+            ],
             'budget_per_orang' => 100000,
             'lokasi' => [
                 'nama_tempat' => 'Cafe Lama',
@@ -77,8 +97,16 @@ class RegistrasiTest extends TestCase
             'X-Device-Fingerprint' => 'device-for-update',
         ])->putJson("/api/v1/registrasi/{$uuid}", [
             'nama_lengkap' => 'Budi Santoso',
-            'minggu' => 3,
-            'hari' => ['sabtu', 'minggu'],
+            'preferensi_minggu' => [
+                [
+                    'minggu' => 3,
+                    'hari' => ['sabtu', 'minggu'],
+                ],
+                [
+                    'minggu' => 4,
+                    'hari' => ['senin'],
+                ],
+            ],
             'budget_per_orang' => 200000,
             'lokasi' => [
                 'nama_tempat' => 'Resto Baru',
@@ -87,9 +115,12 @@ class RegistrasiTest extends TestCase
         ]);
 
         $update->assertOk()
-            ->assertJsonPath('data.minggu', 3)
+            ->assertJsonPath('data.minggu.0', 3)
+            ->assertJsonPath('data.minggu.1', 4)
             ->assertJsonPath('data.budget_per_orang', 200000)
-            ->assertJsonPath('data.lokasi.nama_tempat', 'Resto Baru');
+            ->assertJsonPath('data.lokasi.nama_tempat', 'Resto Baru')
+            ->assertJsonPath('data.preferensi_minggu.0.minggu', 3)
+            ->assertJsonPath('data.preferensi_minggu.1.minggu', 4);
 
         $this->assertEquals(1, Peserta::query()->count());
     }
@@ -100,8 +131,12 @@ class RegistrasiTest extends TestCase
             'X-Device-Fingerprint' => 'test-device-optional-location',
         ])->postJson('/api/v1/registrasi', [
             'nama_lengkap' => 'Fajar Ramadhan',
-            'minggu' => 2,
-            'hari' => ['jumat'],
+            'preferensi_minggu' => [
+                [
+                    'minggu' => 2,
+                    'hari' => ['jumat'],
+                ],
+            ],
             'budget_per_orang' => 150000,
             'catatan' => '',
             'lokasi' => [

@@ -18,6 +18,7 @@ class DashboardStatsResource extends JsonResource
             'distribusi_minggu' => $this['distribusi_minggu'] ?? [],
             'rekomendasi_hari' => $this->transformRekomendasiHari(),
             'transparansi_hari' => $this->transformTransparansiHari(),
+            'detail_ketersediaan' => $this->transformDetailKetersediaan(),
         ];
     }
 
@@ -26,10 +27,10 @@ class DashboardStatsResource extends JsonResource
         return collect($this['transparansi_hari'] ?? [])
             ->map(static function (array $item): array {
                 return [
+                    'minggu' => (int) ($item['minggu'] ?? 0),
                     'hari' => (string) ($item['hari'] ?? ''),
                     'jumlah_peserta' => (int) ($item['jumlah_peserta'] ?? 0),
                     'persentase_peserta' => (float) ($item['persentase_peserta'] ?? 0),
-                    'rata_rata_budget' => isset($item['rata_rata_budget']) ? (int) $item['rata_rata_budget'] : null,
                 ];
             })
             ->values()
@@ -44,23 +45,45 @@ class DashboardStatsResource extends JsonResource
         }
 
         return [
+            'minggu' => (int) ($rekomendasi['minggu'] ?? 0),
             'hari' => (string) ($rekomendasi['hari'] ?? ''),
             'jumlah_peserta' => (int) ($rekomendasi['jumlah_peserta'] ?? 0),
             'persentase_peserta' => (float) ($rekomendasi['persentase_peserta'] ?? 0),
-            'rata_rata_budget' => isset($rekomendasi['rata_rata_budget']) ? (int) $rekomendasi['rata_rata_budget'] : null,
             'is_tie' => (bool) ($rekomendasi['is_tie'] ?? false),
             'tie_breaker' => (string) ($rekomendasi['tie_breaker'] ?? ''),
             'kandidat_teratas' => collect($rekomendasi['kandidat_teratas'] ?? [])
                 ->map(static function (array $item): array {
                     return [
+                        'minggu' => (int) ($item['minggu'] ?? 0),
                         'hari' => (string) ($item['hari'] ?? ''),
                         'jumlah_peserta' => (int) ($item['jumlah_peserta'] ?? 0),
                         'persentase_peserta' => (float) ($item['persentase_peserta'] ?? 0),
-                        'rata_rata_budget' => isset($item['rata_rata_budget']) ? (int) $item['rata_rata_budget'] : null,
                     ];
                 })
                 ->values()
                 ->all(),
         ];
+    }
+
+    private function transformDetailKetersediaan(): array
+    {
+        return collect($this['detail_ketersediaan'] ?? [])
+            ->map(static function (array $row): array {
+                return [
+                    'minggu' => (int) ($row['minggu'] ?? 0),
+                    'hari' => collect($row['hari'] ?? [])
+                        ->map(static function (array $item): array {
+                            return [
+                                'hari' => (string) ($item['hari'] ?? ''),
+                                'jumlah_peserta' => (int) ($item['jumlah_peserta'] ?? 0),
+                                'persentase_peserta' => (float) ($item['persentase_peserta'] ?? 0),
+                            ];
+                        })
+                        ->values()
+                        ->all(),
+                ];
+            })
+            ->values()
+            ->all();
     }
 }

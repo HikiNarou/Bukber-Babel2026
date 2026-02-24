@@ -24,8 +24,8 @@ class DashboardTest extends TestCase
 
         foreach ($peserta as $item) {
             $item->hari()->createMany([
-                ['hari' => 'jumat'],
-                ['hari' => 'sabtu'],
+                ['minggu' => 2, 'hari' => 'jumat'],
+                ['minggu' => 2, 'hari' => 'sabtu'],
             ]);
             $item->lokasi()->create([
                 'nama_tempat' => 'Lokasi '.$item->id,
@@ -47,6 +47,7 @@ class DashboardTest extends TestCase
                     'distribusi_minggu',
                     'rekomendasi_hari',
                     'transparansi_hari',
+                    'detail_ketersediaan',
                 ],
             ]);
     }
@@ -55,7 +56,7 @@ class DashboardTest extends TestCase
     {
         $peserta = Peserta::factory()->create();
         collect(PesertaHari::HARI_LIST)->each(
-            fn (string $hari) => $peserta->hari()->create(['hari' => $hari])
+            fn (string $hari) => $peserta->hari()->create(['minggu' => 2, 'hari' => $hari])
         );
 
         $response = $this->getJson('/api/v1/dashboard/chart/hari');
@@ -68,40 +69,45 @@ class DashboardTest extends TestCase
     public function test_dashboard_stats_returns_dynamic_recommendation_with_transparency(): void
     {
         $jumatA = Peserta::factory()->create(['budget_per_orang' => 150000]);
-        $jumatA->hari()->createMany([['hari' => 'jumat']]);
+        $jumatA->hari()->createMany([['minggu' => 1, 'hari' => 'jumat']]);
 
         $jumatB = Peserta::factory()->create(['budget_per_orang' => 170000]);
-        $jumatB->hari()->createMany([['hari' => 'jumat']]);
+        $jumatB->hari()->createMany([['minggu' => 1, 'hari' => 'jumat']]);
 
         $sabtu = Peserta::factory()->create(['budget_per_orang' => 140000]);
-        $sabtu->hari()->createMany([['hari' => 'sabtu']]);
+        $sabtu->hari()->createMany([
+            ['minggu' => 2, 'hari' => 'sabtu'],
+            ['minggu' => 1, 'hari' => 'jumat'],
+        ]);
 
         $response = $this->getJson('/api/v1/dashboard/stats');
 
         $response->assertOk()
+            ->assertJsonPath('data.rekomendasi_hari.minggu', 1)
             ->assertJsonPath('data.rekomendasi_hari.hari', 'jumat')
-            ->assertJsonPath('data.rekomendasi_hari.jumlah_peserta', 2)
-            ->assertJsonCount(7, 'data.transparansi_hari');
+            ->assertJsonPath('data.rekomendasi_hari.jumlah_peserta', 3)
+            ->assertJsonCount(28, 'data.transparansi_hari')
+            ->assertJsonCount(4, 'data.detail_ketersediaan');
     }
 
     public function test_dashboard_responden_can_be_filtered_by_availability(): void
     {
         $pesertaBisa = Peserta::factory()->create(['nama_lengkap' => 'Peserta Bisa']);
         $pesertaBisa->hari()->createMany([
-            ['hari' => 'senin'],
-            ['hari' => 'selasa'],
-            ['hari' => 'rabu'],
+            ['minggu' => 1, 'hari' => 'senin'],
+            ['minggu' => 1, 'hari' => 'selasa'],
+            ['minggu' => 2, 'hari' => 'rabu'],
         ]);
 
         $pesertaMungkin = Peserta::factory()->create(['nama_lengkap' => 'Peserta Mungkin']);
         $pesertaMungkin->hari()->createMany([
-            ['hari' => 'kamis'],
-            ['hari' => 'jumat'],
+            ['minggu' => 3, 'hari' => 'kamis'],
+            ['minggu' => 3, 'hari' => 'jumat'],
         ]);
 
         $pesertaTidak = Peserta::factory()->create(['nama_lengkap' => 'Peserta Tidak']);
         $pesertaTidak->hari()->createMany([
-            ['hari' => 'sabtu'],
+            ['minggu' => 4, 'hari' => 'sabtu'],
         ]);
 
         $bisaResponse = $this->getJson('/api/v1/dashboard/responden?availability=bisa');
@@ -118,6 +124,27 @@ class DashboardTest extends TestCase
         $tidakResponse->assertOk()
             ->assertJsonPath('meta.total', 1)
             ->assertJsonPath('data.0.nama_lengkap', 'Peserta Tidak');
+    }
+
+    public function test_dashboard_responden_supports_pagination(): void
+    {
+        $peserta = Peserta::factory()->count(12)->create();
+
+        foreach ($peserta as $item) {
+            $item->hari()->create([
+                'minggu' => 1,
+                'hari' => 'senin',
+            ]);
+        }
+
+        $response = $this->getJson('/api/v1/dashboard/responden?per_page=5&page=2');
+
+        $response->assertOk()
+            ->assertJsonCount(5, 'data')
+            ->assertJsonPath('meta.total', 12)
+            ->assertJsonPath('meta.page', 2)
+            ->assertJsonPath('meta.per_page', 5)
+            ->assertJsonPath('meta.last_page', 3);
     }
 
     public function test_dashboard_responden_rejects_invalid_availability_filter(): void

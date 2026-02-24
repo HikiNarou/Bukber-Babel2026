@@ -10,6 +10,7 @@ class PesertaHari extends Model
 {
     use HasFactory;
 
+    public const MINGGU_LIST = [1, 2, 3, 4];
     public const HARI_LIST = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu'];
 
     protected $table = 'peserta_hari';
@@ -18,7 +19,12 @@ class PesertaHari extends Model
 
     protected $fillable = [
         'peserta_id',
+        'minggu',
         'hari',
+    ];
+
+    protected $casts = [
+        'minggu' => 'integer',
     ];
 
     public function peserta(): BelongsTo

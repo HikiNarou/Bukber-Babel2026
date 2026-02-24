@@ -16,7 +16,13 @@ class DashboardServiceTest extends TestCase
     {
         Cache::forget('dashboard_stats');
 
-        Peserta::factory()->count(10)->create();
+        $peserta = Peserta::factory()->count(10)->create();
+        foreach ($peserta as $item) {
+            $item->hari()->create([
+                'minggu' => 2,
+                'hari' => 'jumat',
+            ]);
+        }
 
         $stats = app(DashboardService::class)->getStats();
 
@@ -25,42 +31,44 @@ class DashboardServiceTest extends TestCase
         $this->assertArrayHasKey('minggu_terfavorit', $stats);
         $this->assertArrayHasKey('rekomendasi_hari', $stats);
         $this->assertArrayHasKey('transparansi_hari', $stats);
+        $this->assertArrayHasKey('detail_ketersediaan', $stats);
         $this->assertEquals(10, $stats['total_peserta']);
     }
 
-    public function test_get_stats_recommendation_prioritizes_availability_then_lower_budget_when_tie(): void
+    public function test_get_stats_recommendation_prioritizes_availability_then_earliest_week_and_day_when_tie(): void
     {
         Cache::forget('dashboard_stats');
 
         $seninA = Peserta::factory()->create(['budget_per_orang' => 200000]);
-        $seninA->hari()->createMany([['hari' => 'senin']]);
+        $seninA->hari()->createMany([['minggu' => 2, 'hari' => 'senin']]);
 
         $seninB = Peserta::factory()->create(['budget_per_orang' => 180000]);
-        $seninB->hari()->createMany([['hari' => 'senin']]);
+        $seninB->hari()->createMany([['minggu' => 2, 'hari' => 'senin']]);
 
         $selasaA = Peserta::factory()->create(['budget_per_orang' => 120000]);
-        $selasaA->hari()->createMany([['hari' => 'selasa']]);
+        $selasaA->hari()->createMany([['minggu' => 1, 'hari' => 'selasa']]);
 
         $selasaB = Peserta::factory()->create(['budget_per_orang' => 110000]);
-        $selasaB->hari()->createMany([['hari' => 'selasa']]);
+        $selasaB->hari()->createMany([['minggu' => 1, 'hari' => 'selasa']]);
 
         $rabu = Peserta::factory()->create(['budget_per_orang' => 150000]);
-        $rabu->hari()->createMany([['hari' => 'rabu']]);
+        $rabu->hari()->createMany([['minggu' => 1, 'hari' => 'rabu']]);
 
         $stats = app(DashboardService::class)->getStats();
 
         $this->assertNotNull($stats['rekomendasi_hari']);
+        $this->assertSame(1, $stats['rekomendasi_hari']['minggu']);
         $this->assertSame('selasa', $stats['rekomendasi_hari']['hari']);
         $this->assertTrue($stats['rekomendasi_hari']['is_tie']);
-        $this->assertSame('budget_terendah', $stats['rekomendasi_hari']['tie_breaker']);
+        $this->assertSame('minggu_terawal_lalu_hari_terawal', $stats['rekomendasi_hari']['tie_breaker']);
     }
 
     public function test_get_responden_eager_loads_required_relations_to_prevent_n_plus_one(): void
     {
         $peserta = Peserta::factory()->create();
         $peserta->hari()->createMany([
-            ['hari' => 'jumat'],
-            ['hari' => 'sabtu'],
+            ['minggu' => 2, 'hari' => 'jumat'],
+            ['minggu' => 3, 'hari' => 'sabtu'],
         ]);
         $peserta->lokasi()->create([
             'nama_tempat' => 'Resto A',

@@ -17,7 +17,7 @@ export function HariChart({ data }: HariChartProps) {
       <div className="mb-5 flex items-end justify-between md:mb-8">
         <div>
           <h3 className="text-2xl font-semibold text-white md:text-4xl">Hari Paling Banyak Bisa</h3>
-          <p className="mt-1 text-sm text-slate-400 md:mt-2 md:text-xl">Ketersediaan peserta minggu ini</p>
+          <p className="mt-1 text-sm text-slate-400 md:mt-2 md:text-xl">Akumulasi ketersediaan peserta lintas minggu</p>
         </div>
       </div>
 

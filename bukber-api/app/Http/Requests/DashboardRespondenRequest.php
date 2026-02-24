@@ -15,6 +15,7 @@ class DashboardRespondenRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
             'availability' => ['nullable', Rule::in(['bisa', 'mungkin', 'tidak'])],
         ];

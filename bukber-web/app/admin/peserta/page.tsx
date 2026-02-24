@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/Input";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { adminDeletePeserta, adminGetPeserta, parseApiError } from "@/lib/api";
 import type { Peserta } from "@/lib/types";
-import { formatCompactRupiah, labelHari } from "@/lib/utils";
+import { formatCompactRupiah, formatPreferensiMinggu } from "@/lib/utils";
 
 export default function AdminPesertaPage() {
   const router = useRouter();
@@ -81,7 +81,7 @@ export default function AdminPesertaPage() {
               <div>
                 <p className="text-base font-semibold text-white md:text-lg">{item.nama_lengkap}</p>
                 <p className="text-sm text-slate-300">
-                  Minggu {item.minggu} • {item.hari.map(labelHari).join(", ")} •{" "}
+                  {formatPreferensiMinggu(item.preferensi_minggu) || "-"} • Slot {item.total_slot_ketersediaan} •{" "}
                   {formatCompactRupiah(item.budget_per_orang)}
                 </p>
                 <p className="text-sm text-slate-400">{item.lokasi?.nama_tempat ?? "-"}</p>
