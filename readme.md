@@ -1,6 +1,6 @@
-# YukBukber Cosmic 🌙
+# YukBukber 🌙
 
-YukBukber Cosmic adalah aplikasi fullstack untuk membantu perencanaan acara buka bersama Ramadhan.
+YukBukber merupakan Website untuk membantu perencanaan acara buka bersama Ramadhan.
 
 Proyek ini terdiri dari:
 
